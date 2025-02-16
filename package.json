@@ -1,0 +1,17 @@
+{
+  "name": "consensus-easya",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "eslint": "^9.20.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "tinkerbird": "^0.0.7",
+    "zod": "^3.24.2"
+  }
+}
