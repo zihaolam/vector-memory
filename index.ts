@@ -20,3 +20,5 @@ const memory = new MemoryStore({
   vector,
 });
 
+const memories = await memory.list();
+memory.add("hello i like to eat chocolate");

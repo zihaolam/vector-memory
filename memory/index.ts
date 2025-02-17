@@ -11,9 +11,9 @@ export interface Memory {
 }
 
 export class MemoryStore {
-  vector: VectorStore;
-  embedder: Embedder;
-  llm: LLM;
+  private vector: VectorStore;
+  private embedder: Embedder;
+  private llm: LLM;
 
   constructor({
     vector,
@@ -160,5 +160,9 @@ export class MemoryStore {
     }
 
     return returnedMemories;
+  }
+
+  list(props?: { offset: number; limit: number }) {
+    return this.vector.list(props);
   }
 }

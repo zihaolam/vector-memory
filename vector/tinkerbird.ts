@@ -81,4 +81,21 @@ export class TbVectorStore implements BaseVectorStore {
       metadata: {},
     }));
   }
+
+  async list(props?: { offset?: number; limit?: number }) {
+    const { offset = 0, limit } = props ?? {};
+    const store = await this.getStore();
+    let items = Array.from(store.nodes.values());
+    if (limit !== undefined) {
+      items = items.slice(offset, limit);
+    } else {
+      items = items.slice(offset);
+    }
+
+    return items.map((v) => ({
+      ...v,
+      embedding: Array.from(v.embedding),
+      metadata: {},
+    }));
+  }
 }

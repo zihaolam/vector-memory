@@ -5,6 +5,11 @@ export interface LLM {
     system?: string;
     user: string;
     schema: Schema;
+    model?: any;
   }): Promise<z.infer<Schema>>;
-  generate(prompt: { system?: string; user: string }): Promise<string>;
+  generate(prompt: {
+    system?: string;
+    user: string;
+    model?: any;
+  }): Promise<string>;
 }

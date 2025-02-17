@@ -20,4 +20,5 @@ export interface VectorStore {
   delete(id: number): Promise<void>;
   // returns records sorted by relevance
   search(embedding: Embedding, topK?: number): Promise<EmbeddingResult[]>;
+  list(props?: { offset?: number; limit?: number }): Promise<EmbeddingResult[]>;
 }
