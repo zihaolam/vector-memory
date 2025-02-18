@@ -2,12 +2,18 @@ import { z } from "zod";
 import type { Embedder, Embedding } from "../embeddings";
 import type { LLM } from "../llm";
 import type { VectorStore, EmbeddingResult } from "../vector";
-import { getUpdateMemoryPrompt, UpdateMemoryAction } from "./prompts";
+import {
+  FACT_RETRIEVAL_PROMPT,
+  getUpdateMemoryPrompt,
+  UpdateMemoryAction,
+} from "./prompts";
 
 export interface Memory {
-  id: number;
+  id: string;
   content: string;
   metadata: Record<string, any>;
+  createdAt: number;
+  updatedAt?: number;
 }
 
 export class MemoryStore {
@@ -41,7 +47,8 @@ export class MemoryStore {
     const embeddings =
       content in existingEmbeddings
         ? existingEmbeddings[content]
-        : await this.embedder.embed(content);
+        : (await this.embedder.embed([content]))[0];
+
     return this.vector.add([{ embedding: embeddings, content, metadata }]);
   }
 
@@ -51,7 +58,7 @@ export class MemoryStore {
     existingEmbeddings,
     metadata = {},
   }: {
-    memoryId: number;
+    memoryId: string;
     content: string;
     existingEmbeddings: Record<string, Embedding>;
     metadata?: Record<string, any>;
@@ -63,7 +70,7 @@ export class MemoryStore {
 
     const embedding = existingEmbeddings[content]
       ? existingEmbeddings[content]
-      : await this.embedder.embed(content);
+      : (await this.embedder.embed([content]))[0];
 
     return this.vector.update({
       id: memoryId,
@@ -74,42 +81,39 @@ export class MemoryStore {
   }
 
   async search(content: string): Promise<EmbeddingResult[]> {
-    const embedding = await this.embedder.embed(content);
+    const [embedding] = await this.embedder.embed([content]);
     return this.vector.search(embedding);
   }
 
   async add(content: string): Promise<Memory[]> {
-    const [existingRelevantMemories, { facts: newRetrievedFacts }] =
-      await Promise.all([
-        this.search(content),
-        this.llm.generate({
-          system: "facts",
-          user: content,
-          schema: z.object({ facts: z.array(z.string()) }),
-        }),
-      ]);
-
-    const updateMemoryPrompt = getUpdateMemoryPrompt({
-      newRetrievedFacts,
-      oldMemory: existingRelevantMemories,
+    const { facts: newRetrievedFacts } = await this.llm.generate({
+      system: "facts",
+      user: `${FACT_RETRIEVAL_PROMPT}, user: ${content}`,
+      schema: z.object({ facts: z.array(z.string()) }),
     });
 
     const newMessageEmbeddings: Record<string, Embedding> = {};
     const retrievedOldMemory: Memory[] = [];
     for (const fact of newRetrievedFacts) {
-      const factEmbedding = await this.embedder.embed(fact);
+      const [factEmbedding] = await this.embedder.embed([fact]);
       newMessageEmbeddings[fact] = factEmbedding;
+      console.info("finding existing memories");
       const existingMemories = await this.vector.search(factEmbedding);
       for (const memory of existingMemories) {
-        retrievedOldMemory.push(memory);
+        retrievedOldMemory.push({ ...memory });
       }
     }
 
-    const tempIdMappings: Record<number, number> = {};
+    const tempIdMappings: Record<string, string> = {};
     // make ids easier for the llm to understand with auto-incremented integers, so no hallucination
     retrievedOldMemory.forEach((memory, i) => {
-      tempIdMappings[memory.id] = i;
-      retrievedOldMemory[i].id = i;
+      tempIdMappings[String(i)] = memory.id;
+      retrievedOldMemory[i].id = String(i);
+    });
+
+    const updateMemoryPrompt = getUpdateMemoryPrompt({
+      newRetrievedFacts,
+      oldMemory: retrievedOldMemory,
     });
 
     const newMemoriesWithActions = await this.llm.generate({
@@ -117,9 +121,14 @@ export class MemoryStore {
       schema: z.object({
         actions: z.array(
           z.object({
-            id: z.number(),
+            id: z.string(),
             text: z.string(),
-            action: z.nativeEnum(UpdateMemoryAction),
+            action: z.enum([
+              UpdateMemoryAction.ADD,
+              UpdateMemoryAction.UPDATE,
+              UpdateMemoryAction.DELETE,
+              UpdateMemoryAction.NONE,
+            ]),
           }),
         ),
       }),
@@ -127,17 +136,28 @@ export class MemoryStore {
 
     const returnedMemories: Memory[] = [];
 
+    console.info({ newMemoriesWithActions, tempIdMappings });
     for (const action of newMemoriesWithActions.actions) {
+      console.info(action);
+      console.info({ actual: { ...action, id: tempIdMappings[action.id] } });
       switch (action.action) {
         case UpdateMemoryAction.ADD: {
+          console.info("adding memory");
           const memory = await this.addMemory({
             content: action.text,
             existingEmbeddings: newMessageEmbeddings,
           });
+          console.info("added");
+          console.info(memory);
           returnedMemories.push(...memory);
           continue;
         }
         case UpdateMemoryAction.UPDATE: {
+          console.info("updating memory", {
+            memoryId: tempIdMappings[action.id],
+            content: action.text,
+            existingEmbeddings: newMessageEmbeddings,
+          });
           const memory = await this.updateMemory({
             memoryId: tempIdMappings[action.id],
             content: action.text,
@@ -146,6 +166,7 @@ export class MemoryStore {
           if (memory === null) {
             throw new Error("Memory not found");
           }
+          console.info("updated memory", memory);
           returnedMemories.push(memory);
           continue;
         }

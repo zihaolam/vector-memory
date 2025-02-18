@@ -1,31 +1,19 @@
-import { GenerativeModel, GoogleGenerativeAI } from "@google/generative-ai";
 import type { Embedder } from "./embedding";
 
 export class GeminiEmbedder implements Embedder {
-  model: GenerativeModel;
-
-  constructor(geminiApiKey: string) {
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    this.model = genAI.getGenerativeModel({
-      model: "text-embedding-004",
-    });
+  endpoint: string;
+  constructor(endpoint: string) {
+    this.endpoint = endpoint;
   }
 
-  private textToRequest(content: string) {
-    return {
-      content: { role: "user", parts: [{ text: content }] },
-    };
-  }
-
-  async batchEmbed(contents: string[]): Promise<number[][]> {
-    const result = await this.model.batchEmbedContents({
-      requests: contents.map(this.textToRequest),
-    });
-    return result.embeddings.map((embedding) => embedding.values);
-  }
-
-  async embed(content: string): Promise<number[]> {
-    const result = await this.model.embedContent(this.textToRequest(content));
-    return result.embedding.values;
+  async embed(contents: string[]): Promise<number[][]> {
+    const result: { embeddings: number[][] } = await fetch(
+      `${this.endpoint}/embed`,
+      {
+        method: "POST",
+        body: JSON.stringify({ contents }),
+      },
+    ).then((r) => r.json());
+    return result.embeddings;
   }
 }

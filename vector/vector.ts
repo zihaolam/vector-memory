@@ -7,18 +7,28 @@ export interface Entry {
 }
 
 export interface EmbeddingResult {
-  id: number;
+  id: string;
   embedding: Embedding;
   content: string;
   metadata: Record<string, any>;
+  createdAt: number;
+  updatedAt?: number;
 }
 
+type UpdateableEmbeddingResult = Omit<
+  EmbeddingResult,
+  "createdAt" | "updatedAt"
+>;
+
 export interface VectorStore {
-  get(id: number): Promise<EmbeddingResult | null>;
+  get(id: string): Promise<EmbeddingResult | null>;
   add(embeddings: Entry[]): Promise<EmbeddingResult[]>;
-  update(embedding: EmbeddingResult): Promise<EmbeddingResult>;
-  delete(id: number): Promise<void>;
+  update(embedding: UpdateableEmbeddingResult): Promise<EmbeddingResult>;
+  delete(id: string): Promise<void>;
   // returns records sorted by relevance
-  search(embedding: Embedding, topK?: number): Promise<EmbeddingResult[]>;
-  list(props?: { offset?: number; limit?: number }): Promise<EmbeddingResult[]>;
+  search(
+    embedding: Embedding,
+    opts?: { threshold?: number; topK?: number },
+  ): Promise<EmbeddingResult[]>;
+  list(props?: { cursor?: string; limit?: number }): Promise<EmbeddingResult[]>;
 }

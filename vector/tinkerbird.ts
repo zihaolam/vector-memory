@@ -26,7 +26,7 @@ export class TbVectorStore implements BaseVectorStore {
     return this.#store;
   }
 
-  async get(id: number) {
+  async get(id: string) {
     const store = await this.getStore();
     const node = store.nodes.get(id);
     if (node === undefined) {
@@ -67,13 +67,16 @@ export class TbVectorStore implements BaseVectorStore {
     return embedding;
   }
 
-  async delete(id: number) {
+  async delete(id: string) {
     const store = await this.getStore();
     store.nodes.delete(id);
   }
 
-  async search(embedding: Embedding, topK = 10) {
+  async search(embedding: Embedding, topK = 5) {
     const store = await this.getStore();
+    if (store.nodes.size === 0) {
+      return [];
+    }
     const vectors = store.query(embedding, topK);
     return vectors.map((v) => ({
       ...v,
