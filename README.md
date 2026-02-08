@@ -1,4 +1,4 @@
-# consensus-easya
+Browser compatible memory for LLMs
 
 To install dependencies:
 
